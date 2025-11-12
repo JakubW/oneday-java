@@ -1,7 +1,7 @@
 
 # Preconditions & Hints
 
-Timebox: **Maximum 3 hours**
+Timebox: **Maximum 4 hours**
 
 Please fork this repository and share your approach via a link to your repository.
 When you start working on this exercise, please perform an initial commit and push to your forked repository.
@@ -38,6 +38,7 @@ Because the data may change often, it should be stored in a database to avoid un
 
 ## Acceptance criteria
 
+* A proper API specification is created 
 * The service is written in Java and Spring (no further constraints)
 * The service exposes its functionality via a RESTful API where the request/response is encoded in JSON.
 * The API accepts an address as argument - either as a single or split into multiple parameter (will only be tested with french addresses)
