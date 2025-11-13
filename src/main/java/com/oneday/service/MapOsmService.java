@@ -48,13 +48,11 @@ public class MapOsmService implements MapService {
 
         try {
             NominatimResult nominatimResult = geocodeAddress(address);
-            int elevation = getElevationFromCoordinates(nominatimResult.lat, nominatimResult.lon);
+            int elevation = getElevationFromCoordinates(nominatimResult.getLat(), nominatimResult.getLon());
             return validateAndReturnElevation(elevation);
         } catch (RestClientException e) {
             log.error("External maps API call failed", e);
             return 0;
-        } catch (IllegalArgumentException e) {
-            throw e;  // rethrow validation exceptions
         } catch (Exception e) {
             log.error("Unexpected error while getting altitude", e);
             return 0;
@@ -142,12 +140,12 @@ public class MapOsmService implements MapService {
      */
     private int extractElevation(ElevationResponse elevationResponse,
                                  String latitude, String longitude) {
-        if (elevationResponse == null || elevationResponse.results == null ||
-            elevationResponse.results.length == 0) {
+        if (elevationResponse == null || elevationResponse.getResults() == null ||
+            elevationResponse.getResults().length == 0) {
             log.warn(serviceMessages.getElevation().getNoResult(), latitude, longitude);
             throw new IllegalArgumentException("Elevation data not found for coordinates: " + latitude + "," + longitude);
         }
-        return (int) Math.round(elevationResponse.results[0].elevation);
+        return (int) Math.round(elevationResponse.getResults()[0].getElevation());
     }
 
     /**
@@ -176,8 +174,24 @@ public class MapOsmService implements MapService {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class NominatimResult {
-        public String lat;
-        public String lon;
+        private String lat;
+        private String lon;
+
+        public String getLat() {
+            return lat;
+        }
+
+        public void setLat(String lat) {
+            this.lat = lat;
+        }
+
+        public String getLon() {
+            return lon;
+        }
+
+        public void setLon(String lon) {
+            this.lon = lon;
+        }
     }
 
     /**
@@ -185,7 +199,15 @@ public class MapOsmService implements MapService {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ElevationResponse {
-        public ElevationResult[] results;
+        private ElevationResult[] results;
+
+        public ElevationResult[] getResults() {
+            return results;
+        }
+
+        public void setResults(ElevationResult[] results) {
+            this.results = results;
+        }
     }
 
     /**
@@ -193,6 +215,14 @@ public class MapOsmService implements MapService {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ElevationResult {
-        public double elevation;
+        private double elevation;
+
+        public double getElevation() {
+            return elevation;
+        }
+
+        public void setElevation(double elevation) {
+            this.elevation = elevation;
+        }
     }
 }

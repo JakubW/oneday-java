@@ -219,16 +219,16 @@ public class AddressControllerIntegrationTest {
     // Helper methods to create mock objects
     private MapOsmService.NominatimResult createNominatimResult(String lat, String lon) {
         MapOsmService.NominatimResult result = new MapOsmService.NominatimResult();
-        result.lat = lat;
-        result.lon = lon;
+        result.setLat(lat);
+        result.setLon(lon);
         return result;
     }
 
     private MapOsmService.ElevationResponse createElevationResponse(double elevation) {
         MapOsmService.ElevationResponse response = new MapOsmService.ElevationResponse();
         MapOsmService.ElevationResult result = new MapOsmService.ElevationResult();
-        result.elevation = elevation;
-        response.results = new MapOsmService.ElevationResult[]{result};
+        result.setElevation(elevation);
+        response.setResults(new MapOsmService.ElevationResult[]{result});
         return response;
     }
 }
