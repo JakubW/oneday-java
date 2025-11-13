@@ -2,13 +2,13 @@ package com.oneday.bootstrap;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.oneday.config.DatasetProperties;
 import com.oneday.model.AltitudeOffsetRange;
 import com.oneday.model.PostalTemperature;
 import com.oneday.repository.AltitudeOffsetRangeRepository;
 import com.oneday.repository.PostalTemperatureRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -27,16 +27,13 @@ public class DataLoader implements CommandLineRunner {
     private final AltitudeOffsetRangeRepository offsetRepository;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Logger log = LoggerFactory.getLogger(DataLoader.class);
+    private final DatasetProperties datasetProperties;
 
-    @Value("${app.datasets.temperatures}")
-    private String temperaturesDatasetPath;
-
-    @Value("${app.datasets.offsets}")
-    private String offsetsDatasetPath;
-
-    public DataLoader(PostalTemperatureRepository repository, AltitudeOffsetRangeRepository offsetRepository) {
+    public DataLoader(PostalTemperatureRepository repository, AltitudeOffsetRangeRepository offsetRepository,
+                      DatasetProperties datasetProperties) {
         this.repository = repository;
         this.offsetRepository = offsetRepository;
+        this.datasetProperties = datasetProperties;
     }
 
     @Override
@@ -58,7 +55,7 @@ public class DataLoader implements CommandLineRunner {
                 repository.deleteAll();
             }
 
-            ClassPathResource resource = new ClassPathResource(temperaturesDatasetPath);
+            ClassPathResource resource = new ClassPathResource(datasetProperties.getTemperatures());
             try (InputStream is = resource.getInputStream()) {
                 List<PostalTemperature> list = mapper.readValue(is, new TypeReference<List<PostalTemperature>>(){});
                 repository.saveAll(list);
@@ -82,7 +79,7 @@ public class DataLoader implements CommandLineRunner {
                 offsetRepository.deleteAll();
             }
 
-            ClassPathResource offRes = new ClassPathResource(offsetsDatasetPath);
+            ClassPathResource offRes = new ClassPathResource(datasetProperties.getOffsets());
             try (InputStream is = offRes.getInputStream()) {
                 List<AltitudeOffsetRange> offsets = mapper.readValue(is, new TypeReference<List<AltitudeOffsetRange>>(){});
                 offsetRepository.saveAll(offsets);

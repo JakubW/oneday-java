@@ -1,12 +1,13 @@
 package com.oneday.service;
 
+import com.oneday.config.ErrorMessageProperties;
+import com.oneday.config.ServiceMessageProperties;
 import com.oneday.model.AltitudeOffsetRange;
 import com.oneday.model.PostalTemperature;
 import com.oneday.repository.AltitudeOffsetRangeRepository;
 import com.oneday.repository.PostalTemperatureRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -23,23 +24,17 @@ public class TemperatureService {
     private final PostalTemperatureRepository repository;
     private final MapService mapService;
     private final AltitudeOffsetRangeRepository altitudeOffsetRangeRepository;
+    private final ErrorMessageProperties errorMessages;
+    private final ServiceMessageProperties serviceMessages;
 
-    @Value("${error.postal-code-not-found}")
-    private String postalCodeNotFoundError;
-
-    @Value("${temperature.no-offsets}")
-    private String noOffsetsMessage;
-
-    @Value("${temperature.altitude-exceeds}")
-    private String altitudeExceedsMessage;
-
-    @Value("${error.altitude-exceed}")
-    private String altitudeExceedError;
-
-    public TemperatureService(PostalTemperatureRepository repository, MapService mapService, AltitudeOffsetRangeRepository altitudeOffsetRangeRepository) {
+    public TemperatureService(PostalTemperatureRepository repository, MapService mapService,
+                              AltitudeOffsetRangeRepository altitudeOffsetRangeRepository,
+                              ErrorMessageProperties errorMessages, ServiceMessageProperties serviceMessages) {
         this.repository = repository;
         this.mapService = mapService;
         this.altitudeOffsetRangeRepository = altitudeOffsetRangeRepository;
+        this.errorMessages = errorMessages;
+        this.serviceMessages = serviceMessages;
     }
 
     /**
@@ -58,7 +53,7 @@ public class TemperatureService {
         double base = pt.map(PostalTemperature::getTemperature)
                 .orElseThrow(() -> {
                     log.warn("Postal code prefix '{}' not found in database", key);
-                    return new IllegalArgumentException(postalCodeNotFoundError);
+                    return new IllegalArgumentException(errorMessages.getPostalCodeNotFound());
                 });
 
         int altitude = mapService.getAltitudeMeters(address);
@@ -94,14 +89,14 @@ public class TemperatureService {
         List<AltitudeOffsetRange> ranges = altitudeOffsetRangeRepository.findAllByOrderByFromMetersAsc();
 
         if (ranges == null || ranges.isEmpty()) {
-            log.debug(noOffsetsMessage);
+            log.debug(serviceMessages.getTemperature().getNoOffsets());
             return 0;
         }
 
         int maxTo = ranges.stream().mapToInt(AltitudeOffsetRange::getToMeters).max().orElse(Integer.MAX_VALUE);
         if (altitude > maxTo) {
-            log.warn(altitudeExceedsMessage, altitude, maxTo);
-            throw new IllegalArgumentException(String.format(altitudeExceedError, maxTo));
+            log.warn(serviceMessages.getTemperature().getAltitudeExceeds(), altitude, maxTo);
+            throw new IllegalArgumentException(String.format(errorMessages.getAltitudeExceed(), maxTo));
         }
 
         for (AltitudeOffsetRange r : ranges) {

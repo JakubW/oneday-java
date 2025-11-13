@@ -1,9 +1,9 @@
 package com.oneday.exception;
 
+import com.oneday.config.ErrorMessageProperties;
 import com.oneday.dto.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -23,15 +23,11 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private final ErrorMessageProperties errorMessages;
 
-    @Value("${error.validation}")
-    private String validationErrorMessage;
-
-    @Value("${error.internal-server}")
-    private String internalServerErrorMessage;
-
-    @Value("${error.unexpected}")
-    private String unexpectedErrorMessage;
+    public GlobalExceptionHandler(ErrorMessageProperties errorMessages) {
+        this.errorMessages = errorMessages;
+    }
 
     /**
      * Handle IllegalArgumentException - validation errors from business logic.
@@ -40,7 +36,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("Validation error: {}", e.getMessage());
-        return ResponseEntity.badRequest().body(new ErrorResponse(validationErrorMessage, e.getMessage()));
+        return ResponseEntity.badRequest().body(new ErrorResponse(errorMessages.getValidation(), e.getMessage()));
     }
 
     /**
@@ -67,7 +63,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception e) {
         log.error("Unexpected error", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse(internalServerErrorMessage, unexpectedErrorMessage));
+                .body(new ErrorResponse(errorMessages.getInternalServer(), errorMessages.getUnexpected()));
     }
 }
 

@@ -4,13 +4,15 @@ import javax.validation.constraints.NotBlank;
 
 /**
  * Request DTO for address and temperature lookup.
+ * Note: Validation messages use hardcoded strings as @NotBlank annotations
+ * don't support externalization via ConfigurationProperties.
  */
 
 public class AddressRequest {
-    @NotBlank(message = "${error.address-postal-code-required}")
+    @NotBlank(message = "address or postalCode must be provided")
     private String address;
 
-    @NotBlank(message = "${error.address-postal-code-required}")
+    @NotBlank(message = "address or postalCode must be provided")
     private String postalCode;
 
     public AddressRequest() {}

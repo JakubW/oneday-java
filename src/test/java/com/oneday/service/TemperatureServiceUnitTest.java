@@ -1,5 +1,7 @@
 package com.oneday.service;
 
+import com.oneday.config.ErrorMessageProperties;
+import com.oneday.config.ServiceMessageProperties;
 import com.oneday.model.AltitudeOffsetRange;
 import com.oneday.model.PostalTemperature;
 import com.oneday.repository.AltitudeOffsetRangeRepository;
@@ -29,11 +31,26 @@ public class TemperatureServiceUnitTest {
     @Mock
     private AltitudeOffsetRangeRepository altitudeOffsetRangeRepository;
 
+    @Mock
+    private ErrorMessageProperties errorMessages;
+
+    @Mock
+    private ServiceMessageProperties serviceMessages;
+
     private TemperatureService temperatureService;
 
     @BeforeEach
     void setup() {
-        temperatureService = new TemperatureService(repository, mapService, altitudeOffsetRangeRepository);
+        // Setup service message properties mocks
+        ServiceMessageProperties.Temperature temperatureProps = new ServiceMessageProperties.Temperature();
+        temperatureProps.setNoOffsets("No altitude offset ranges configured, returning 0");
+        temperatureProps.setAltitudeExceeds("Altitude {0} exceeds maximum configured altitude {1}");
+
+        when(serviceMessages.getTemperature()).thenReturn(temperatureProps);
+        when(errorMessages.getPostalCodeNotFound()).thenReturn("Postal Code prefix not found in temperature data or vice versa.");
+        when(errorMessages.getAltitudeExceed()).thenReturn("Altitude exceed {0} meters, no temperature offset data available.");
+
+        temperatureService = new TemperatureService(repository, mapService, altitudeOffsetRangeRepository, errorMessages, serviceMessages);
 
         // default offset ranges matching datasets/offsets.json
         when(altitudeOffsetRangeRepository.findAllByOrderByFromMetersAsc()).thenReturn(Arrays.asList(
