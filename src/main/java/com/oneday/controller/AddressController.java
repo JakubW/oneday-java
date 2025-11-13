@@ -1,14 +1,17 @@
 package com.oneday.controller;
 
+import com.oneday.dto.AddressRequest;
+import com.oneday.dto.AltitudeTemperatureResponse;
 import com.oneday.service.MapService;
 import com.oneday.service.TemperatureService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import javax.validation.Valid;
 
+/**
+ * REST controller for address-based altitude and temperature queries.
+ */
 @RestController
 @RequestMapping("/api/v1")
 public class AddressController {
@@ -21,31 +24,20 @@ public class AddressController {
         this.mapService = mapService;
     }
 
-    static class AddressRequest {
-        public String address;
-        public String postalCode;
-
-        public AddressRequest() {}
-    }
-
+    /**
+     * Get altitude and standard minimum temperature for a given address and postal code.
+     *
+     * @param request DTO containing address and postalCode
+     * @return Response with altitude in meters and temperature in Celsius
+     */
     @PostMapping("/altitude-temp")
-    public ResponseEntity<?> getAltitudeAndTemperature(@RequestBody AddressRequest req) {
-        if ((req.address == null || req.address.isBlank()) && (req.postalCode == null || req.postalCode.isBlank())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "address or postalCode must be provided"));
-        }
+    public ResponseEntity<AltitudeTemperatureResponse> getAltitudeAndTemperature(@Valid @RequestBody AddressRequest request) {
+        int altitude = mapService.getAltitudeMeters(request.getAddress());
+        double temp = temperatureService.getStandardMinTemperature(request.getPostalCode(), request.getAddress());
 
-        try {
-            int altitude = mapService.getAltitudeMeters(req.address);
-            double temp = temperatureService.getStandardMinTemperature(req.postalCode, req.address);
-
-            Map<String, Object> body = new HashMap<>();
-            body.put("altitude", altitude);
-            body.put("standardMinTemperature", temp);
-            return ResponseEntity.ok(body);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "internal error"));
-        }
+        AltitudeTemperatureResponse response = new AltitudeTemperatureResponse(altitude, temp);
+        return ResponseEntity.ok(response);
     }
 }
+
+

@@ -97,7 +97,8 @@ public class AddressControllerIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value(containsString("1200")));
+                .andExpect(jsonPath("$.error").value("Validation error"))
+                .andExpect(jsonPath("$.message").value(containsString("1200")));
     }
 
     @Test

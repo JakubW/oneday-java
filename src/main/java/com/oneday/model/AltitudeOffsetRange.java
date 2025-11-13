@@ -7,6 +7,10 @@ import javax.persistence.Id;
 import javax.persistence.Column;
 import javax.persistence.Table;
 
+/**
+ * Entity representing temperature offset for a given altitude range.
+ * Used to adjust base temperature based on elevation above sea level.
+ */
 @Entity
 @Table(name = "altitude_offset_range")
 public class AltitudeOffsetRange {
@@ -22,11 +26,11 @@ public class AltitudeOffsetRange {
     private int toMeters;
 
     @Column(name = "offset_value", nullable = false)
-    private int offset;
+    private double offset;
 
     public AltitudeOffsetRange() {}
 
-    public AltitudeOffsetRange(int fromMeters, int toMeters, int offset) {
+    public AltitudeOffsetRange(int fromMeters, int toMeters, double offset) {
         this.fromMeters = fromMeters;
         this.toMeters = toMeters;
         this.offset = offset;
@@ -56,11 +60,11 @@ public class AltitudeOffsetRange {
         this.toMeters = toMeters;
     }
 
-    public int getOffset() {
+    public double getOffset() {
         return offset;
     }
 
-    public void setOffset(int offset) {
+    public void setOffset(double offset) {
         this.offset = offset;
     }
 }

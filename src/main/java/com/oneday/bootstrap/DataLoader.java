@@ -15,6 +15,10 @@ import org.springframework.stereotype.Component;
 import java.io.InputStream;
 import java.util.List;
 
+/**
+ * Bootstrap component that loads initial data from JSON files into the database.
+ * Clears existing data before loading to ensure fresh state.
+ */
 @Component
 public class DataLoader implements CommandLineRunner {
 
@@ -30,22 +34,53 @@ public class DataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
+        loadTemperatureData();
+        loadOffsetData();
+    }
+
+    /**
+     * Load postal temperature data from JSON file.
+     * Clears existing data before loading to prevent duplicates.
+     */
+    private void loadTemperatureData() {
         log.info("Loading temperature dataset into DB...");
-        ClassPathResource resource = new ClassPathResource("datasets/temperatures.json");
-        try (InputStream is = resource.getInputStream()) {
-            List<PostalTemperature> list = mapper.readValue(is, new TypeReference<List<PostalTemperature>>(){});
-            repository.saveAll(list);
-            log.info("Loaded {} postal temperatures.", list.size());
+        try {
+            long existingCount = repository.count();
+            if (existingCount > 0) {
+                log.info("Clearing {} existing postal temperature records", existingCount);
+                repository.deleteAll();
+            }
+
+            ClassPathResource resource = new ClassPathResource("datasets/temperatures.json");
+            try (InputStream is = resource.getInputStream()) {
+                List<PostalTemperature> list = mapper.readValue(is, new TypeReference<List<PostalTemperature>>(){});
+                repository.saveAll(list);
+                log.info("Successfully loaded {} postal temperatures.", list.size());
+            }
         } catch (Exception e) {
             log.error("Failed to load temperatures.json", e);
         }
+    }
 
-        log.info("Loading offsets dataset into DB...");
-        ClassPathResource offRes = new ClassPathResource("datasets/offsets.json");
-        try (InputStream is = offRes.getInputStream()) {
-            List<AltitudeOffsetRange> offsets = mapper.readValue(is, new TypeReference<List<AltitudeOffsetRange>>(){});
-            offsetRepository.saveAll(offsets);
-            log.info("Loaded {} offset ranges.", offsets.size());
+    /**
+     * Load altitude offset range data from JSON file.
+     * Clears existing data before loading to prevent duplicates.
+     */
+    private void loadOffsetData() {
+        log.info("Loading altitude offset dataset into DB...");
+        try {
+            long existingCount = offsetRepository.count();
+            if (existingCount > 0) {
+                log.info("Clearing {} existing altitude offset records", existingCount);
+                offsetRepository.deleteAll();
+            }
+
+            ClassPathResource offRes = new ClassPathResource("datasets/offsets.json");
+            try (InputStream is = offRes.getInputStream()) {
+                List<AltitudeOffsetRange> offsets = mapper.readValue(is, new TypeReference<List<AltitudeOffsetRange>>(){});
+                offsetRepository.saveAll(offsets);
+                log.info("Successfully loaded {} altitude offset ranges.", offsets.size());
+            }
         } catch (Exception e) {
             log.error("Failed to load offsets.json", e);
         }

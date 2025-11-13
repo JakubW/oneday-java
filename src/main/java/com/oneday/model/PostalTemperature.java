@@ -3,6 +3,10 @@ package com.oneday.model;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
+/**
+ * Entity representing standard minimum temperature for a French postal code.
+ * The postalCode field stores the first 2 digits of the French postal code (department).
+ */
 @Entity
 public class PostalTemperature {
 

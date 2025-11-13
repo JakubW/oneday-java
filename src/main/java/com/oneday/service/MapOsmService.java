@@ -79,11 +79,17 @@ public class MapOsmService implements MapService {
         public String lon;
     }
 
+    /**
+     * Response from Open-Elevation API.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ElevationResponse {
         public ElevationResult[] results;
     }
 
+    /**
+     * Single elevation result from Open-Elevation API.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ElevationResult {
         public double elevation;
