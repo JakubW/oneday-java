@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Service for temperature-related operations based on postal codes and altitude.
@@ -47,22 +46,39 @@ public class TemperatureService {
      * @throws IllegalArgumentException if postal code is not found
      */
     public double getStandardMinTemperature(String postalCode, String address) throws IllegalArgumentException {
-        String key = normalizePostalPrefix(postalCode);
-        Optional<PostalTemperature> pt = repository.findById(key);
-
-        double base = pt.map(PostalTemperature::getTemperature)
-                .orElseThrow(() -> {
-                    log.warn("Postal code prefix '{}' not found in database", key);
-                    return new IllegalArgumentException(errorMessages.getPostalCodeNotFound());
-                });
+        String normalizedPostalCode = normalizePostalPrefix(postalCode);
+        double baseTemperature = getBaseTemperatureOrThrow(normalizedPostalCode);
 
         int altitude = mapService.getAltitudeMeters(address);
-        double offset = altitudeOffsetForMeters(altitude);
+        double temperatureOffset = getAltitudeOffsetForMeters(altitude);
+
+        double adjustedTemperature = baseTemperature + temperatureOffset;
 
         log.debug("Temperature calculation for postal code {}: base={}, altitude={}, offset={}, result={}",
-                key, base, altitude, offset, base + offset);
+                normalizedPostalCode, baseTemperature, altitude, temperatureOffset, adjustedTemperature);
 
-        return base + offset;
+        return adjustedTemperature;
+    }
+
+    /**
+     * Get base temperature for postal code from database.
+     *
+     * @param postalCode normalized postal code (2 digits)
+     * @return base minimum temperature in Celsius
+     * @throws IllegalArgumentException if postal code not found
+     */
+    private double getBaseTemperatureOrThrow(String postalCode) throws IllegalArgumentException {
+        return repository.findById(postalCode)
+                .map(PostalTemperature::getTemperature)
+                .orElseThrow(() -> createMissingPostalCodeException(postalCode));
+    }
+
+    /**
+     * Create an exception for missing postal code with proper logging.
+     */
+    private IllegalArgumentException createMissingPostalCodeException(String postalCode) {
+        log.warn("Postal code prefix '{}' not found in database", postalCode);
+        return new IllegalArgumentException(errorMessages.getPostalCodeNotFound());
     }
 
     /**
@@ -85,29 +101,62 @@ public class TemperatureService {
      * @return temperature offset in Celsius
      * @throws IllegalArgumentException if altitude exceeds maximum configured range
      */
-    private double altitudeOffsetForMeters(int altitude) throws IllegalArgumentException {
-        List<AltitudeOffsetRange> ranges = altitudeOffsetRangeRepository.findAllByOrderByFromMetersAsc();
+    private double getAltitudeOffsetForMeters(int altitude) throws IllegalArgumentException {
+        List<AltitudeOffsetRange> altitudeRanges = altitudeOffsetRangeRepository.findAllByOrderByFromMetersAsc();
 
-        if (ranges == null || ranges.isEmpty()) {
+        if (altitudeRanges == null || altitudeRanges.isEmpty()) {
             log.debug(serviceMessages.getTemperature().getNoOffsets());
             return 0;
         }
 
-        int maxTo = ranges.stream().mapToInt(AltitudeOffsetRange::getToMeters).max().orElse(Integer.MAX_VALUE);
-        if (altitude > maxTo) {
-            log.warn(serviceMessages.getTemperature().getAltitudeExceeds(), altitude, maxTo);
-            throw new IllegalArgumentException(String.format(errorMessages.getAltitudeExceed(), maxTo));
-        }
+        validateAltitudeWithinMaxRange(altitude, altitudeRanges);
 
-        for (AltitudeOffsetRange r : ranges) {
-            if (altitude >= r.getFromMeters() && altitude <= r.getToMeters()) {
+        return findAltitudeOffset(altitude, altitudeRanges);
+    }
+
+    /**
+     * Validate that altitude doesn't exceed the maximum configured range.
+     *
+     * @throws IllegalArgumentException if altitude exceeds maximum
+     */
+    private void validateAltitudeWithinMaxRange(int altitude, List<AltitudeOffsetRange> altitudeRanges) {
+        int maxAltitude = altitudeRanges.stream()
+                .mapToInt(AltitudeOffsetRange::getToMeters)
+                .max()
+                .orElse(Integer.MAX_VALUE);
+
+        if (altitude > maxAltitude) {
+            log.warn(serviceMessages.getTemperature().getAltitudeExceeds(), altitude, maxAltitude);
+            throw new IllegalArgumentException(
+                String.format(errorMessages.getAltitudeExceed(), maxAltitude)
+            );
+        }
+    }
+
+    /**
+     * Find the temperature offset for a given altitude from the list of ranges.
+     *
+     * @return temperature offset or 0 if no matching range found
+     */
+    private double findAltitudeOffset(int altitude, List<AltitudeOffsetRange> altitudeRanges) {
+        for (AltitudeOffsetRange altitudeRange : altitudeRanges) {
+            if (altitudeIsInRange(altitude, altitudeRange)) {
                 log.debug("Found offset {} for altitude {} in range [{}, {}]",
-                        r.getOffset(), altitude, r.getFromMeters(), r.getToMeters());
-                return r.getOffset();
+                        altitudeRange.getOffset(), altitude,
+                        altitudeRange.getFromMeters(), altitudeRange.getToMeters());
+                return altitudeRange.getOffset();
             }
         }
 
         log.debug("No matching altitude offset range for altitude {}, returning 0", altitude);
         return 0;
+    }
+
+    /**
+     * Check if altitude falls within the given range.
+     */
+    private boolean altitudeIsInRange(int altitude, AltitudeOffsetRange altitudeRange) {
+        return altitude >= altitudeRange.getFromMeters() &&
+               altitude <= altitudeRange.getToMeters();
     }
 }

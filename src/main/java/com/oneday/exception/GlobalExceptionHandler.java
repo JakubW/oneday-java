@@ -34,6 +34,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @SuppressWarnings("unused")  // Used by Spring framework via @ExceptionHandler
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("Validation error: {}", e.getMessage());
         return ResponseEntity.badRequest().body(new ErrorResponse(errorMessages.getValidation(), e.getMessage()));
@@ -44,15 +45,11 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException e) {
-        Map<String, String> errors = new HashMap<>();
-        e.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
-        log.warn("Validation errors: {}", errors);
-        return ResponseEntity.badRequest().body(errors);
+    @SuppressWarnings("unused")  // Used by Spring framework via @ExceptionHandler
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException exception) {
+        Map<String, String> validationErrors = extractValidationErrors(exception);
+        log.warn("Validation errors: {}", validationErrors);
+        return ResponseEntity.badRequest().body(validationErrors);
     }
 
     /**
@@ -60,10 +57,41 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    @SuppressWarnings("unused")  // Used by Spring framework via @ExceptionHandler
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception e) {
         log.error("Unexpected error", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse(errorMessages.getInternalServer(), errorMessages.getUnexpected()));
     }
-}
 
+    /**
+     * Extract field-level validation errors from BindingResult.
+     *
+     * @param exception the MethodArgumentNotValidException containing binding errors
+     * @return map of field names to error messages
+     */
+    private Map<String, String> extractValidationErrors(MethodArgumentNotValidException exception) {
+        Map<String, String> validationErrors = new HashMap<>();
+
+        exception.getBindingResult().getAllErrors().forEach(error -> {
+            String fieldName = getFieldName(error);
+            String errorMessage = error.getDefaultMessage();
+            validationErrors.put(fieldName, errorMessage);
+        });
+
+        return validationErrors;
+    }
+
+    /**
+     * Extract field name from error object.
+     *
+     * @param error the ObjectError from binding result
+     * @return field name or object name if not a field error
+     */
+    private String getFieldName(Object error) {
+        if (error instanceof FieldError) {
+            return ((FieldError) error).getField();
+        }
+        return error.toString();
+    }
+}

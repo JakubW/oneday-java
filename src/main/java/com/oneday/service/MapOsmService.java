@@ -22,6 +22,10 @@ import java.nio.charset.StandardCharsets;
 @Primary
 public class MapOsmService implements MapService {
 
+    private static final int MAX_ELEVATION_METERS = 20000;
+    private static final int MIN_ELEVATION_METERS = -500;
+    private static final String NOMINATIM_QUERY_PARAMS = "?q=%s&format=json&limit=1&addressdetails=0";
+
     private final RestTemplate restTemplate;
     private final Logger log = LoggerFactory.getLogger(MapOsmService.class);
     private final ApiProperties apiProperties;
@@ -38,49 +42,136 @@ public class MapOsmService implements MapService {
 
     @Override
     public int getAltitudeMeters(String address) throws IllegalArgumentException {
-        if (address == null || address.isBlank()) return 0;
-        try {
-            // 1) Use Nominatim to geocode address -> lat/lon
-            String q = URLEncoder.encode(address, StandardCharsets.UTF_8);
-            String nominatimUrlWithParams = apiProperties.getNominatimUrl() + "?q=" + q + "&format=json&limit=1&addressdetails=0";
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set(HttpHeaders.USER_AGENT, apiProperties.getUserAgent());
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-
-            ResponseEntity<NominatimResult[]> resp = restTemplate.exchange(nominatimUrlWithParams, HttpMethod.GET, entity, NominatimResult[].class);
-            NominatimResult[] results = resp.getBody();
-
-            if (results == null || results.length == 0) {
-                log.warn(serviceMessages.getNominatim().getNoResults(), address);
-                return 0;
-            }
-            double lat = Double.parseDouble(results[0].lat);
-            double lon = Double.parseDouble(results[0].lon);
-
-            // 2) Use Open-Elevation
-            String elevationUrlWithParams = apiProperties.getElevationUrl() + "?locations=" + lat + "," + lon;
-            ElevationResponse er = restTemplate.getForObject(elevationUrlWithParams, ElevationResponse.class);
-            if (er == null || er.results == null || er.results.length == 0) {
-                log.warn(serviceMessages.getElevation().getNoResult(), lat, lon);
-                return 0;
-            }
-            int elevation = (int) Math.round(er.results[0].elevation);
-            if (elevation > 20000 || elevation < -500) {
-                // clearly bogus
-                throw new IllegalArgumentException(errorMessages.getInvalidElevation());
-            }
-            return elevation;
-        } catch (RestClientException e) {
-            log.error("External maps call failed", e);
-            return 0;
-        } catch (IllegalArgumentException e) {
-            // rethrow known validation exceptions
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to get altitude", e);
+        if (isInvalidAddress(address)) {
             return 0;
         }
+
+        try {
+            NominatimResult nominatimResult = geocodeAddress(address);
+            int elevation = getElevationFromCoordinates(nominatimResult.lat, nominatimResult.lon);
+            return validateAndReturnElevation(elevation);
+        } catch (RestClientException e) {
+            log.error("External maps API call failed", e);
+            return 0;
+        } catch (IllegalArgumentException e) {
+            throw e;  // rethrow validation exceptions
+        } catch (Exception e) {
+            log.error("Unexpected error while getting altitude", e);
+            return 0;
+        }
+    }
+
+    /**
+     * Check if the address is valid (not null or blank).
+     */
+    private boolean isInvalidAddress(String address) {
+        return address == null || address.isBlank();
+    }
+
+    /**
+     * Geocode address using Nominatim API to get latitude and longitude.
+     *
+     * @param address the address to geocode
+     * @return NominatimResult containing lat/lon
+     * @throws IllegalArgumentException if address cannot be geocoded
+     */
+    private NominatimResult geocodeAddress(String address) {
+        String encodedAddress = URLEncoder.encode(address, StandardCharsets.UTF_8);
+        String nominatimUrl = buildNominatimUrl(encodedAddress);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.USER_AGENT, apiProperties.getUserAgent());
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<NominatimResult[]> response = restTemplate.exchange(
+            nominatimUrl, HttpMethod.GET, entity, NominatimResult[].class
+        );
+        NominatimResult[] results = response.getBody();
+
+        return validateNominatimResults(results, address);
+    }
+
+    /**
+     * Build the complete Nominatim API URL with query parameters.
+     */
+    private String buildNominatimUrl(String encodedAddress) {
+        return apiProperties.getNominatimUrl() +
+            String.format(NOMINATIM_QUERY_PARAMS, encodedAddress);
+    }
+
+    /**
+     * Validate Nominatim results and return the first result.
+     *
+     * @throws IllegalArgumentException if no results found
+     */
+    private NominatimResult validateNominatimResults(NominatimResult[] results, String address) {
+        if (results == null || results.length == 0) {
+            log.warn(serviceMessages.getNominatim().getNoResults(), address);
+            throw new IllegalArgumentException("Address not found: " + address);
+        }
+        return results[0];
+    }
+
+    /**
+     * Get elevation in meters from Open-Elevation API.
+     *
+     * @param latitude the latitude
+     * @param longitude the longitude
+     * @return elevation in meters
+     */
+    private int getElevationFromCoordinates(String latitude, String longitude) {
+        String elevationUrl = buildElevationUrl(latitude, longitude);
+        ElevationResponse elevationResponse = restTemplate.getForObject(
+            elevationUrl, ElevationResponse.class
+        );
+
+        return extractElevation(elevationResponse, latitude, longitude);
+    }
+
+    /**
+     * Build the complete Open-Elevation API URL.
+     */
+    private String buildElevationUrl(String latitude, String longitude) {
+        return apiProperties.getElevationUrl() + "?locations=" + latitude + "," + longitude;
+    }
+
+    /**
+     * Extract elevation value from API response.
+     *
+     * @throws IllegalArgumentException if no elevation data found
+     */
+    private int extractElevation(ElevationResponse elevationResponse,
+                                 String latitude, String longitude) {
+        if (elevationResponse == null || elevationResponse.results == null ||
+            elevationResponse.results.length == 0) {
+            log.warn(serviceMessages.getElevation().getNoResult(), latitude, longitude);
+            throw new IllegalArgumentException("Elevation data not found for coordinates: " + latitude + "," + longitude);
+        }
+        return (int) Math.round(elevationResponse.results[0].elevation);
+    }
+
+    /**
+     * Validate elevation is within acceptable bounds.
+     *
+     * @param elevation elevation in meters
+     * @return the elevation if valid
+     * @throws IllegalArgumentException if elevation is invalid
+     */
+    private int validateAndReturnElevation(int elevation) {
+        if (!isValidElevation(elevation)) {
+            log.error("Invalid elevation value: {}. Must be between {} and {} meters",
+                elevation, MIN_ELEVATION_METERS, MAX_ELEVATION_METERS);
+            throw new IllegalArgumentException(errorMessages.getInvalidElevation());
+        }
+        return elevation;
+    }
+
+    /**
+     * Check if elevation is within acceptable bounds.
+     * Realworld elevations range from ~-430m (Dead Sea) to ~8,849m (Mt. Everest)
+     */
+    private boolean isValidElevation(int elevation) {
+        return elevation >= MIN_ELEVATION_METERS && elevation <= MAX_ELEVATION_METERS;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

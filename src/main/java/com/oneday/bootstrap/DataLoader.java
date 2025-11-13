@@ -37,7 +37,7 @@ public class DataLoader implements CommandLineRunner {
     }
 
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) {
         loadTemperatureData();
         loadOffsetData();
     }
@@ -47,23 +47,12 @@ public class DataLoader implements CommandLineRunner {
      * Clears existing data before loading to prevent duplicates.
      */
     private void loadTemperatureData() {
-        log.info("Loading temperature dataset into DB...");
-        try {
-            long existingCount = repository.count();
-            if (existingCount > 0) {
-                log.info("Clearing {} existing postal temperature records", existingCount);
-                repository.deleteAll();
-            }
-
-            ClassPathResource resource = new ClassPathResource(datasetProperties.getTemperatures());
-            try (InputStream is = resource.getInputStream()) {
-                List<PostalTemperature> list = mapper.readValue(is, new TypeReference<List<PostalTemperature>>(){});
-                repository.saveAll(list);
-                log.info("Successfully loaded {} postal temperatures.", list.size());
-            }
-        } catch (Exception e) {
-            log.error("Failed to load temperatures.json", e);
-        }
+        loadDatasetFromFile(
+            datasetProperties.getTemperatures(),
+            repository,
+            "postal temperatures",
+            new TypeReference<List<PostalTemperature>>() {}
+        );
     }
 
     /**
@@ -71,22 +60,71 @@ public class DataLoader implements CommandLineRunner {
      * Clears existing data before loading to prevent duplicates.
      */
     private void loadOffsetData() {
-        log.info("Loading altitude offset dataset into DB...");
-        try {
-            long existingCount = offsetRepository.count();
-            if (existingCount > 0) {
-                log.info("Clearing {} existing altitude offset records", existingCount);
-                offsetRepository.deleteAll();
-            }
+        loadDatasetFromFile(
+            datasetProperties.getOffsets(),
+            offsetRepository,
+            "altitude offset ranges",
+            new TypeReference<List<AltitudeOffsetRange>>() {}
+        );
+    }
 
-            ClassPathResource offRes = new ClassPathResource(datasetProperties.getOffsets());
-            try (InputStream is = offRes.getInputStream()) {
-                List<AltitudeOffsetRange> offsets = mapper.readValue(is, new TypeReference<List<AltitudeOffsetRange>>(){});
-                offsetRepository.saveAll(offsets);
-                log.info("Successfully loaded {} altitude offset ranges.", offsets.size());
-            }
+    /**
+     * Generic method to load dataset from JSON file into repository.
+     * Clears existing data before loading to prevent duplicates.
+     *
+     * @param filePath the classpath resource file path
+     * @param repository the Spring Data repository to save data to
+     * @param datasetName human-readable name of the dataset
+     * @param typeReference Jackson TypeReference for JSON deserialization
+     * @param <T> the type of entity being loaded
+     */
+    private <T> void loadDatasetFromFile(
+        String filePath,
+        org.springframework.data.repository.CrudRepository<T, ?> repository,
+        String datasetName,
+        TypeReference<List<T>> typeReference) {
+
+        log.info("Loading {} dataset into DB...", datasetName);
+        try {
+            clearExistingData(repository, datasetName);
+            loadDataFromJsonFile(filePath, repository, datasetName, typeReference);
         } catch (Exception e) {
-            log.error("Failed to load offsets.json", e);
+            log.error("Failed to load {}.json", datasetName, e);
+        }
+    }
+
+    /**
+     * Clear existing data from repository if any exists.
+     */
+    private <T> void clearExistingData(
+        org.springframework.data.repository.CrudRepository<T, ?> repository,
+        String datasetName) {
+
+        long existingCount = repository.count();
+        if (existingCount > 0) {
+            log.info("Clearing {} existing {} records", existingCount, datasetName);
+            repository.deleteAll();
+        }
+    }
+
+    /**
+     * Load data from JSON file and save to repository.
+     */
+    private <T> void loadDataFromJsonFile(
+        String filePath,
+        org.springframework.data.repository.CrudRepository<T, ?> repository,
+        String datasetName,
+        TypeReference<List<T>> typeReference) {
+
+        ClassPathResource resource = new ClassPathResource(filePath);
+        try (InputStream inputStream = resource.getInputStream()) {
+            List<T> dataList = mapper.readValue(inputStream, typeReference);
+            repository.saveAll(dataList);
+            log.info("Successfully loaded {} {}.", dataList.size(), datasetName);
+        } catch (Exception e) {
+            throw new RuntimeException(
+                String.format("Failed to load data from file: %s", filePath), e
+            );
         }
     }
 }
