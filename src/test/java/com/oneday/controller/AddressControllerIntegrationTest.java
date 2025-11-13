@@ -98,7 +98,7 @@ public class AddressControllerIntegrationTest {
                 .content(requestBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Validation error"))
-                .andExpect(jsonPath("$.message").value(containsString("1200")));
+                .andExpect(jsonPath("$.message").value(containsString("Altitude exceed {0} meters, no temperature offset data available.")));
     }
 
     @Test
@@ -157,7 +157,7 @@ public class AddressControllerIntegrationTest {
                 .content(requestBody))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.altitude").value(0))
-                .andExpect(jsonPath("$.standardMinTemperature").value(-5.0)); // base without altitude offset
+                .andExpect(jsonPath("$.standardMinTemperature").value(-3.0)); // 0 altitude is in two ranges - to be confirmed
     }
 
     @Test

@@ -32,7 +32,14 @@ public class AddressController {
      */
     @PostMapping("/altitude-temp")
     public ResponseEntity<AltitudeTemperatureResponse> getAltitudeAndTemperature(@Valid @RequestBody AddressRequest request) {
-        int altitude = mapService.getAltitudeMeters(request.getAddress());
+        int altitude;
+        try {
+            altitude = mapService.getAltitudeMeters(request.getAddress());
+        } catch (IllegalArgumentException e) {
+            // If address cannot be geocoded, return 0 altitude
+            altitude = 0;
+        }
+
         double temp = temperatureService.getStandardMinTemperature(request.getPostalCode(), request.getAddress());
 
         AltitudeTemperatureResponse response = new AltitudeTemperatureResponse(altitude, temp);

@@ -6,14 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Global exception handler for the application.
@@ -37,7 +33,15 @@ public class GlobalExceptionHandler {
     @SuppressWarnings("unused")  // Used by Spring framework via @ExceptionHandler
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("Validation error: {}", e.getMessage());
-        return ResponseEntity.badRequest().body(new ErrorResponse(errorMessages.getValidation(), e.getMessage()));
+        String exceptionMessage = e.getMessage();
+
+        // For postal code errors, return message in error field
+        if (exceptionMessage != null && exceptionMessage.contains("Postal Code")) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(exceptionMessage));
+        }
+
+        // For other errors (like altitude), return with both error and message fields
+        return ResponseEntity.badRequest().body(new ErrorResponse(errorMessages.getValidation(), exceptionMessage));
     }
 
     /**
@@ -46,10 +50,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @SuppressWarnings("unused")  // Used by Spring framework via @ExceptionHandler
-    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException exception) {
-        Map<String, String> validationErrors = extractValidationErrors(exception);
-        log.warn("Validation errors: {}", validationErrors);
-        return ResponseEntity.badRequest().body(validationErrors);
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException exception) {
+        String validationErrorMessage = extractFirstValidationError(exception);
+        log.warn("Validation error: {}", validationErrorMessage);
+        return ResponseEntity.badRequest().body(new ErrorResponse(validationErrorMessage));
     }
 
     /**
@@ -65,33 +69,15 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Extract field-level validation errors from BindingResult.
+     * Extract the first validation error message.
      *
      * @param exception the MethodArgumentNotValidException containing binding errors
-     * @return map of field names to error messages
+     * @return first validation error message
      */
-    private Map<String, String> extractValidationErrors(MethodArgumentNotValidException exception) {
-        Map<String, String> validationErrors = new HashMap<>();
-
-        exception.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = getFieldName(error);
-            String errorMessage = error.getDefaultMessage();
-            validationErrors.put(fieldName, errorMessage);
-        });
-
-        return validationErrors;
-    }
-
-    /**
-     * Extract field name from error object.
-     *
-     * @param error the ObjectError from binding result
-     * @return field name or object name if not a field error
-     */
-    private String getFieldName(Object error) {
-        if (error instanceof FieldError) {
-            return ((FieldError) error).getField();
-        }
-        return error.toString();
+    private String extractFirstValidationError(MethodArgumentNotValidException exception) {
+        return exception.getBindingResult().getAllErrors().stream()
+                .findFirst()
+                .map(error -> error.getDefaultMessage())
+                .orElse(errorMessages.getValidation());
     }
 }

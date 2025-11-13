@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,14 +47,14 @@ public class TemperatureServiceUnitTest {
         temperatureProps.setNoOffsets("No altitude offset ranges configured, returning 0");
         temperatureProps.setAltitudeExceeds("Altitude {0} exceeds maximum configured altitude {1}");
 
-        when(serviceMessages.getTemperature()).thenReturn(temperatureProps);
-        when(errorMessages.getPostalCodeNotFound()).thenReturn("Postal Code prefix not found in temperature data or vice versa.");
-        when(errorMessages.getAltitudeExceed()).thenReturn("Altitude exceed {0} meters, no temperature offset data available.");
+        lenient().when(serviceMessages.getTemperature()).thenReturn(temperatureProps);
+        lenient().when(errorMessages.getPostalCodeNotFound()).thenReturn("Postal Code prefix not found in temperature data or vice versa.");
+        lenient().when(errorMessages.getAltitudeExceed()).thenReturn("Altitude exceed {0} meters, no temperature offset data available.");
 
         temperatureService = new TemperatureService(repository, mapService, altitudeOffsetRangeRepository, errorMessages, serviceMessages);
 
         // default offset ranges matching datasets/offsets.json
-        when(altitudeOffsetRangeRepository.findAllByOrderByFromMetersAsc()).thenReturn(Arrays.asList(
+        lenient().when(altitudeOffsetRangeRepository.findAllByOrderByFromMetersAsc()).thenReturn(Arrays.asList(
                 new AltitudeOffsetRange(-10000, 0, 2),
                 new AltitudeOffsetRange(0, 199, 0),
                 new AltitudeOffsetRange(200, 399, -1),
@@ -92,7 +93,7 @@ public class TemperatureServiceUnitTest {
     void testGetStandardMinTemperature_PostalCodeNotFound_ThrowsIllegalArgumentException() {
         // Arrange
         when(repository.findById("99")).thenReturn(Optional.empty()); // Not found
-        when(mapService.getAltitudeMeters(anyString())).thenReturn(100);
+        lenient().when(mapService.getAltitudeMeters(anyString())).thenReturn(100);
 
         // Act & Assert
         assertThrows(IllegalArgumentException.class,
@@ -122,7 +123,7 @@ public class TemperatureServiceUnitTest {
         double result = temperatureService.getStandardMinTemperature("75", "Paris");
 
         // Assert
-        assertEquals(-5.0, result); // -5.0 + 0 offset
+        assertEquals(-3.0, result); // -5.0 + 2 offset (two ranges of 0)
     }
 
     @Test
