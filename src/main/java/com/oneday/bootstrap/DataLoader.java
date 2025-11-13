@@ -8,6 +8,7 @@ import com.oneday.repository.AltitudeOffsetRangeRepository;
 import com.oneday.repository.PostalTemperatureRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,12 @@ public class DataLoader implements CommandLineRunner {
     private final AltitudeOffsetRangeRepository offsetRepository;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Logger log = LoggerFactory.getLogger(DataLoader.class);
+
+    @Value("${app.datasets.temperatures}")
+    private String temperaturesDatasetPath;
+
+    @Value("${app.datasets.offsets}")
+    private String offsetsDatasetPath;
 
     public DataLoader(PostalTemperatureRepository repository, AltitudeOffsetRangeRepository offsetRepository) {
         this.repository = repository;
@@ -51,7 +58,7 @@ public class DataLoader implements CommandLineRunner {
                 repository.deleteAll();
             }
 
-            ClassPathResource resource = new ClassPathResource("datasets/temperatures.json");
+            ClassPathResource resource = new ClassPathResource(temperaturesDatasetPath);
             try (InputStream is = resource.getInputStream()) {
                 List<PostalTemperature> list = mapper.readValue(is, new TypeReference<List<PostalTemperature>>(){});
                 repository.saveAll(list);
@@ -75,7 +82,7 @@ public class DataLoader implements CommandLineRunner {
                 offsetRepository.deleteAll();
             }
 
-            ClassPathResource offRes = new ClassPathResource("datasets/offsets.json");
+            ClassPathResource offRes = new ClassPathResource(offsetsDatasetPath);
             try (InputStream is = offRes.getInputStream()) {
                 List<AltitudeOffsetRange> offsets = mapper.readValue(is, new TypeReference<List<AltitudeOffsetRange>>(){});
                 offsetRepository.saveAll(offsets);

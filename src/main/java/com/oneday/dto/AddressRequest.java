@@ -7,10 +7,10 @@ import javax.validation.constraints.NotBlank;
  */
 
 public class AddressRequest {
-    @NotBlank(message = "address or postalCode must be provided")
+    @NotBlank(message = "${error.address-postal-code-required}")
     private String address;
 
-    @NotBlank(message = "address or postalCode must be provided")
+    @NotBlank(message = "${error.address-postal-code-required}")
     private String postalCode;
 
     public AddressRequest() {}

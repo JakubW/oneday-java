@@ -6,6 +6,7 @@ import com.oneday.repository.AltitudeOffsetRangeRepository;
 import com.oneday.repository.PostalTemperatureRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,6 +23,18 @@ public class TemperatureService {
     private final PostalTemperatureRepository repository;
     private final MapService mapService;
     private final AltitudeOffsetRangeRepository altitudeOffsetRangeRepository;
+
+    @Value("${error.postal-code-not-found}")
+    private String postalCodeNotFoundError;
+
+    @Value("${temperature.no-offsets}")
+    private String noOffsetsMessage;
+
+    @Value("${temperature.altitude-exceeds}")
+    private String altitudeExceedsMessage;
+
+    @Value("${error.altitude-exceed}")
+    private String altitudeExceedError;
 
     public TemperatureService(PostalTemperatureRepository repository, MapService mapService, AltitudeOffsetRangeRepository altitudeOffsetRangeRepository) {
         this.repository = repository;
@@ -45,7 +58,7 @@ public class TemperatureService {
         double base = pt.map(PostalTemperature::getTemperature)
                 .orElseThrow(() -> {
                     log.warn("Postal code prefix '{}' not found in database", key);
-                    return new IllegalArgumentException("Postal Code prefix not found in temperature data or vice versa.");
+                    return new IllegalArgumentException(postalCodeNotFoundError);
                 });
 
         int altitude = mapService.getAltitudeMeters(address);
@@ -81,14 +94,14 @@ public class TemperatureService {
         List<AltitudeOffsetRange> ranges = altitudeOffsetRangeRepository.findAllByOrderByFromMetersAsc();
 
         if (ranges == null || ranges.isEmpty()) {
-            log.debug("No altitude offset ranges configured, returning 0");
+            log.debug(noOffsetsMessage);
             return 0;
         }
 
         int maxTo = ranges.stream().mapToInt(AltitudeOffsetRange::getToMeters).max().orElse(Integer.MAX_VALUE);
         if (altitude > maxTo) {
-            log.warn("Altitude {} exceeds maximum configured altitude {}", altitude, maxTo);
-            throw new IllegalArgumentException("Altitude exceed " + maxTo + " meters, no temperature offset data available.");
+            log.warn(altitudeExceedsMessage, altitude, maxTo);
+            throw new IllegalArgumentException(String.format(altitudeExceedError, maxTo));
         }
 
         for (AltitudeOffsetRange r : ranges) {

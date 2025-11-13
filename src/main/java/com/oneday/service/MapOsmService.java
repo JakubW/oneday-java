@@ -3,6 +3,7 @@ package com.oneday.service;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +23,24 @@ public class MapOsmService implements MapService {
     private final RestTemplate restTemplate;
     private final Logger log = LoggerFactory.getLogger(MapOsmService.class);
 
+    @Value("${app.nominatim.url}")
+    private String nominatimUrl;
+
+    @Value("${app.elevation.url}")
+    private String elevationUrl;
+
+    @Value("${app.user-agent}")
+    private String userAgent;
+
+    @Value("${nominatim.no-results}")
+    private String nominatimNoResults;
+
+    @Value("${elevation.no-result}")
+    private String elevationNoResult;
+
+    @Value("${error.invalid-elevation}")
+    private String invalidElevationError;
+
     public MapOsmService(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
     }
@@ -32,33 +51,33 @@ public class MapOsmService implements MapService {
         try {
             // 1) Use Nominatim to geocode address -> lat/lon
             String q = URLEncoder.encode(address, StandardCharsets.UTF_8);
-            String nominatimUrl = "https://nominatim.openstreetmap.org/search?q=" + q + "&format=json&limit=1&addressdetails=0";
+            String nominatimUrlWithParams = nominatimUrl + "?q=" + q + "&format=json&limit=1&addressdetails=0";
 
             HttpHeaders headers = new HttpHeaders();
-            headers.set(HttpHeaders.USER_AGENT, "oneday-java-app/1.0 (contact@example.com)");
+            headers.set(HttpHeaders.USER_AGENT, userAgent);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-            ResponseEntity<NominatimResult[]> resp = restTemplate.exchange(nominatimUrl, HttpMethod.GET, entity, NominatimResult[].class);
+            ResponseEntity<NominatimResult[]> resp = restTemplate.exchange(nominatimUrlWithParams, HttpMethod.GET, entity, NominatimResult[].class);
             NominatimResult[] results = resp.getBody();
 
             if (results == null || results.length == 0) {
-                log.warn("Nominatim returned no results for address: {}", address);
+                log.warn(nominatimNoResults, address);
                 return 0;
             }
             double lat = Double.parseDouble(results[0].lat);
             double lon = Double.parseDouble(results[0].lon);
 
             // 2) Use Open-Elevation
-            String elevationUrl = "https://api.open-elevation.com/api/v1/lookup?locations=" + lat + "," + lon;
-            ElevationResponse er = restTemplate.getForObject(elevationUrl, ElevationResponse.class);
+            String elevationUrlWithParams = elevationUrl + "?locations=" + lat + "," + lon;
+            ElevationResponse er = restTemplate.getForObject(elevationUrlWithParams, ElevationResponse.class);
             if (er == null || er.results == null || er.results.length == 0) {
-                log.warn("Open-Elevation returned no result for {},{}", lat, lon);
+                log.warn(elevationNoResult, lat, lon);
                 return 0;
             }
             int elevation = (int) Math.round(er.results[0].elevation);
             if (elevation > 20000 || elevation < -500) {
                 // clearly bogus
-                throw new IllegalArgumentException("Received invalid elevation value from external service");
+                throw new IllegalArgumentException(invalidElevationError);
             }
             return elevation;
         } catch (RestClientException e) {
